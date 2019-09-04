@@ -35,7 +35,7 @@ Resources:
                                     },
                                     "TimeoutSeconds": 3600,
                                     "InputPath":"$",
-                                    "ResultPath":"$.kraken",
+                                    "ResultPath":"$.krakenOut",
                                     "Retry": [
                                        {
                                              "ErrorEquals": [
@@ -64,7 +64,7 @@ Resources:
                                     },
                                     "TimeoutSeconds": 3600,
                                     "InputPath":"$",
-                                    "ResultPath":"$.status",
+                                    "ResultPath":"$.preQCout",
                                     "Retry": [
                                        {
                                              "ErrorEquals": [
@@ -93,6 +93,8 @@ Resources:
                                     },
                                     "TimeoutSeconds": 3600,
                                     "Next":"RunSpades",
+                                    "InputPath":"$",
+                                    "ResultPath":"$.trimgaloreOut",
                                     "Retry": [
                                        {
                                              "ErrorEquals": [
@@ -116,7 +118,7 @@ Resources:
                                     "TimeoutSeconds": 3600,
                                     "Next":"RunBusco",
                                     "InputPath":"$",
-                                    "ResultPath":"$.status",
+                                    "ResultPath":"$.spadesOut",
                                     "Retry": [
                                        {
                                              "ErrorEquals": [
@@ -139,7 +141,7 @@ Resources:
                                     },
                                     "TimeoutSeconds": 3600,
                                     "InputPath":"$",
-                                    "ResultPath":"$.status",
+                                    "ResultPath":"$.buscoOut",
                                     "Retry": [
                                        {
                                              "ErrorEquals": [
