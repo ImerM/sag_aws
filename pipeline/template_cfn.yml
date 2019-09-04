@@ -74,7 +74,7 @@ Outputs:
           "ResultsFolder": "s3://${JobResultsBucket}/preqc",          
           "PreProcCmdArgs": "--phred64 --pe-mode 1",
           "IndexCmdArgs": "--no-reverse -t 4",
-          "PreQCcmdArgs": "-t 12 --force-EM",
+          "PreQCcmdArgs": "-t 16 --force-EM",
           "PreQCreportCmdArgs": " --page_per_plot"
         },
         "kraken": {
@@ -82,7 +82,7 @@ Outputs:
           "JobName": "Kraken1",
           "InputFiles": "s3://public-bucket-imer/ecoli_mda_lane1_left.fastq.gz, s3://public-bucket-imer/ecoli_mda_lane1_right.fastq.gz",
           "ResultsPath": "s3://${JobResultsBucket}/kraken",          
-          "CmdArgs": "--threads 16 --gzip-compressed --paired --quick"
+          "CmdArgs": "--threads 8 --gzip-compressed --paired --quick"
         },
         "trimgalore": {
           "WorkingDir": "/scratch",
