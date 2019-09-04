@@ -1,0 +1,214 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Description: Setup Batch Job Definitions
+
+Parameters:
+  RoleStackName:
+    Description: "Stack that deploys roles for genomic workflow"
+    Type: String
+  JobResultsBucket:
+    Description: "Bucket that holds workflow job results"
+    Type: String
+  DefaultSampleName:
+    Description: "A default sample name for parameters"
+    Type: String
+    Default: "NA12878"
+
+Resources:
+  PreQCJobDefinition:
+    Type: AWS::Batch::JobDefinition
+    Properties:
+      JobDefinitionName: "PreQC"
+      Type: container
+      RetryStrategy:
+        Attempts: 1
+      Parameters:
+        ResultsFolder: !Sub "s3://${JobResultsBucket}/${DefaultSampleName}/preqc"
+        FastQ1S3Path: "s3://public-bucket-imer/ecoli_mda_lane1_left.fastq.gz"
+        FastQ2S3Path: "s3://public-bucket-imer/ecoli_mda_lane1_right.fastq.gz"
+        WorkingDir: "/scratch"
+        PreProcCmdArgs: "--phred64 --pe-mode 1"
+        IndexCmdArgs: "--no-reverse -t 4"
+        PreQCcmdArgs: "-t 12 --force-EM"
+        PreQCreportCmdArgs: " --page_per_plot"
+      ContainerProperties:
+        Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/preqc"
+        Vcpus: 16
+        Memory: 32000
+        JobRoleArn:
+          Fn::ImportValue: !Sub "${RoleStackName}:ECSTaskRole"
+        Command:
+          - "--fastq1_s3_path"
+          - "Ref::FastQ1S3Path"
+          - "--fastq2_s3_path"
+          - "Ref::FastQ2S3Path"
+          - "--results_folder"
+          - "Ref::ResultsFolder"
+          - "--working_dir"
+          - "Ref::WorkingDir"
+          - "--preproc_cmd_args"
+          - "Ref::PreProcCmdArgs"
+          - "--index_cmd_args"
+          - "Ref::IndexCmdArgs"
+          - "--preqc_cmd_args"
+          - "Ref::PreQCcmdArgs"
+          - "--preqc_report_cmd_args"
+          - "Ref::PreQCreportCmdArgs"
+        MountPoints:
+          - ContainerPath: "/scratch"
+            ReadOnly: false
+            SourceVolume: docker_scratch
+        Volumes:
+          - Name: docker_scratch
+            Host:
+              SourcePath: "/docker_scratch"
+
+  TrimGaloreJobDefinition:
+    Type: AWS::Batch::JobDefinition
+    Properties:
+      JobDefinitionName: "TrimGalore"
+      Type: container
+      RetryStrategy:
+        Attempts: 1
+      Parameters:
+        FastQ1S3Path: !Sub "s3://public-bucket-imer/ecoli_mda_lane1_left.fastq.gz"
+        FastQ2S3Path: !Sub "s3://public-bucket-imer/ecoli_mda_lane1_right.fastq.gz"
+        CmdArgs: "--gzip -q 10 --paired --retain_unpaired"
+        ResultsPath: !Sub "s3://${JobResultsBucket}/${DefaultSampleName}/trimmed"
+        WorkingDir: "/scratch"
+      ContainerProperties:
+        Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/trim_galore"
+        Vcpus: 8
+        Memory: 16000
+        JobRoleArn:
+          Fn::ImportValue: !Sub "${RoleStackName}:ECSTaskRole"
+        Command:
+          - "--fastq1_s3_path"
+          - "Ref::FastQ1S3Path"
+          - "--fastq2_s3_path"
+          - "Ref::FastQ2S3Path"
+          - "--cmd_args"
+          - "Ref::CmdArgs"
+          - "--working_dir"
+          - "Ref::WorkingDir"
+          - "--results_path"
+          - "Ref::ResultsPath"
+        MountPoints:
+          - ContainerPath: "/scratch"
+            ReadOnly: false
+            SourceVolume: docker_scratch
+        Volumes:
+          - Name: docker_scratch
+            Host:
+              SourcePath: "/docker_scratch"
+
+  SpadesJobDefinition:
+    Type: AWS::Batch::JobDefinition
+    Properties:
+      JobDefinitionName: "Spades"
+      Type: container
+      RetryStrategy:
+        Attempts: 1
+      Parameters:
+        InputFlags: "pe1-1, pe1-2"
+        InputFiles: !Sub "s3://${JobResultsBucket}/${DefaultSampleName}/trimmed/ecoli_mda_lane1_left_val_1.fq.gz, s3://${JobResultsBucket}/${DefaultSampleName}/trimmed/ecoli_mda_lane1_right_val_2.fq.gz"
+        CommandArgs: "--only-assembler --sc -t 8"
+        WorkingDir: "/scratch"
+        ResultsPath: !Sub "s3://${JobResultsBucket}/${DefaultSampleName}/spades"
+      ContainerProperties:
+        Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/spades"
+        Vcpus: 8
+        Memory: 20000
+        JobRoleArn:
+          Fn::ImportValue: !Sub "${RoleStackName}:ECSTaskRole"
+        Command:
+          - "--input_flags"
+          - "Ref::InputFlags"
+          - "--input_files"
+          - "Ref::InputFiles"
+          - "--cmd_args"
+          - "Ref::CommandArgs"
+          - "--working_dir"
+          - "Ref::WorkingDir"
+          - "--results_path"
+          - "Ref::ResultsPath"
+        MountPoints:
+          - ContainerPath: "/scratch"
+            ReadOnly: false
+            SourceVolume: docker_scratch
+        Volumes:
+          - Name: docker_scratch
+            Host:
+              SourcePath: "/docker_scratch"
+
+  BuscoJobDefinition:
+    Type: AWS::Batch::JobDefinition
+    Properties:
+      JobDefinitionName: "Busco"
+      Type: container
+      RetryStrategy:
+        Attempts: 1
+      Parameters:
+        InputFile: !Sub "s3://${JobResultsBucket}/${DefaultSampleName}/spades/scaffolds.fasta"
+        CmdArgs: "-l proteobacteria_odb9 -m genome -c 8 -sp E_coli_K12 -f"
+        ResultsPath: !Sub "s3://${JobResultsBucket}/${DefaultSampleName}/busco"
+        WorkingDir: "/scratch"
+      ContainerProperties:
+        Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/busco"
+        Vcpus: 4
+        Memory: 40000
+        JobRoleArn:
+          Fn::ImportValue: !Sub "${RoleStackName}:ECSTaskRole"
+        Command:
+          - "--input_file"
+          - "Ref::InputFile"
+          - "--cmd_args"
+          - "Ref::CmdArgs"
+          - "--results_path"
+          - "Ref::ResultsPath"
+          - "--working_dir"
+          - "Ref::WorkingDir"
+        MountPoints:
+          - ContainerPath: "/scratch"
+            ReadOnly: false
+            SourceVolume: docker_scratch
+        Volumes:
+          - Name: docker_scratch
+            Host:
+              SourcePath: "/docker_scratch"
+
+  KrakenJobDefinition:
+    Type: AWS::Batch::JobDefinition
+    Properties:
+      JobDefinitionName: "Kraken"
+      Type: container
+      RetryStrategy:
+        Attempts: 1
+      Parameters:
+        InputFiles: "s3://public-bucket-imer/ecoli_mda_lane1_left.fastq.gz, s3://public-bucket-imer/ecoli_mda_lane1_right.fastq.gz"
+        CmdArgs: "--threads 16 --gzip-compressed --paired --quick"
+        ResultsPath: !Sub "s3://${JobResultsBucket}/${DefaultSampleName}/kraken"
+        WorkingDir: "/scratch"
+      ContainerProperties:
+        Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/kraken"
+        Vcpus: 16
+        Memory: 32000
+        JobRoleArn:
+          Fn::ImportValue: !Sub "${RoleStackName}:ECSTaskRole"
+        Command:
+          - "--input_files"
+          - "Ref::InputFiles"
+          - "--cmd_args"
+          - "Ref::CmdArgs"
+          - "--results_path"
+          - "Ref::ResultsPath"
+          - "--working_dir"
+          - "Ref::WorkingDir"
+        MountPoints:
+          - ContainerPath: "/scratch"
+            ReadOnly: false
+            SourceVolume: docker_scratch
+        Volumes:
+          - Name: docker_scratch
+            Host:
+              SourcePath: "/docker_scratch"

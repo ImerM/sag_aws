@@ -1,0 +1,129 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Setup Batch genomics pipeline infrastructure
+
+Parameters:
+  TemplatesBucket:
+    Description: "S3 bucket that stores the nested templates"
+    Type: String
+  ImageId:
+    Description: "Image ID for BatchGenomics AMI."
+    Type: String
+
+Resources:
+  # Bucket to store job results
+  JobResultsBucket:
+    Type: "AWS::S3::Bucket"
+  VPCStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://s3.${AWS::Region}.amazonaws.com/${TemplatesBucket}/vpc_template_cfn.yml"
+      TimeoutInMinutes: '5'
+  RoleStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://s3.${AWS::Region}.amazonaws.com/${TemplatesBucket}/roles_template_cfn.yml"
+      TimeoutInMinutes: '5'
+  BatchEnvStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://s3.${AWS::Region}.amazonaws.com/${TemplatesBucket}/batch_env_template_cfn.yml"
+      Parameters:
+        RoleStackName: !GetAtt RoleStack.Outputs.StackName
+        VPCStackName: !GetAtt VPCStack.Outputs.StackName
+        ImageId: !Sub "${ImageId}"
+      TimeoutInMinutes: '5'
+  BatchJobStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://s3.${AWS::Region}.amazonaws.com/${TemplatesBucket}/batch_jobs_template_cfn.yml"
+      Parameters:
+        RoleStackName: !GetAtt RoleStack.Outputs.StackName
+        JobResultsBucket: !Ref JobResultsBucket
+      TimeoutInMinutes: '5'
+  StateMachineStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://s3.${AWS::Region}.amazonaws.com/${TemplatesBucket}/state_machine_template_cfn.yml"
+      Parameters:
+        RoleStackName: !GetAtt RoleStack.Outputs.StackName
+      TimeoutInMinutes: '5'
+
+Outputs:
+  ImageId:
+    Value: !Sub "${ImageId}"
+  # Makes job results bucket available to other stacks
+  JobResultsBucket:
+    Description: JobResultsBucket
+    Value: !Ref JobResultsBucket
+  # Makes state machine stack name available to other stacks
+  StateMachineStack:
+    Description: StateMachineStack
+    Value: !GetAtt StateMachineStack.Outputs.StackName
+  # Generate the example workflow input by adding in the jobs result bucket.
+  # This input is used in the run.sh command.
+  FullWorkflowInput:
+    Description: Full workflow input
+    Value: !Sub |-
+      {
+        "preQC": {
+          "WorkingDir": "/scratch",
+          "JobName": "PreQC1",
+          "FastQ1S3Path": "s3://public-bucket-imer/ecoli_mda_lane1_left.fastq.gz",
+          "FastQ2S3Path": "s3://public-bucket-imer/ecoli_mda_lane1_right.fastq.gz",
+          "ResultsFolder": "s3://${JobResultsBucket}/preqc",          
+          "PreProcCmdArgs": "--phred64 --pe-mode 1",
+          "IndexCmdArgs": "--no-reverse -t 4",
+          "PreQCcmdArgs": "-t 12 --force-EM",
+          "PreQCreportCmdArgs": " --page_per_plot"
+        },
+        "kraken": {
+          "WorkingDir": "/scratch",
+          "JobName": "Kraken1",
+          "InputFiles": "s3://public-bucket-imer/ecoli_mda_lane1_left.fastq.gz, s3://public-bucket-imer/ecoli_mda_lane1_right.fastq.gz",
+          "ResultsPath": "s3://${JobResultsBucket}/kraken",          
+          "CmdArgs": "--threads 16 --gzip-compressed --paired --quick"
+        },
+        "trimgalore": {
+          "WorkingDir": "/scratch",
+          "JobName": "TrimGalore1",
+          "FastQ1S3Path": "s3://public-bucket-imer/ecoli_mda_lane1_left.fastq.gz",
+          "FastQ2S3Path": "s3://public-bucket-imer/ecoli_mda_lane1_right.fastq.gz",
+          "CmdArgs": "--gzip -q 10 --paired --retain_unpaired",
+          "ResultsPath": "s3://${JobResultsBucket}/trimmed"
+        },
+        "spades": {
+          "WorkingDir": "/scratch",
+          "JobName": "Spades1",
+          "InputFlags": "pe1-1, pe1-2",
+          "CmdArgs": "--only-assembler --sc -t 8",
+          "InputFiles": "s3://${JobResultsBucket}/trimmed/ecoli_mda_lane1_left_val_1.fq.gz, s3://${JobResultsBucket}/trimmed/ecoli_mda_lane1_right_val_2.fq.gz",
+          "ResultsPath": "s3://${JobResultsBucket}/spades/"
+        },
+        "busco": {
+          "WorkingDir": "/scratch",
+          "JobName": "Busco1",
+          "InputFile": "s3://${JobResultsBucket}/spades/scaffolds.fasta",
+          "ResultsPath": "s3://${JobResultsBucket}/busco",
+          "CmdArgs": "-l proteobacteria_odb9 -m genome -c 8 -sp E_coli_K12 -f"
+        }
+      }
+  # A minimal example workflow input.  All the job definitions have defaults.
+  MinimalWorkflowInput:
+    Description: Minimal workflow input
+    Value: !Sub |-
+      {
+        "preQC": {},
+        "kraken": {},
+        "trimgalore": {},
+        "spades": {},
+        "busco": {}
+      }
+
+# TEMPLATES_BUCKET=$(aws cloudformation describe-stacks --stack-name batch-genomics-zone --query 'Stacks[].Outputs[?OutputKey==`TemplatesBucket`].OutputValue' --output text)
+# IMAGE_ID=$(aws cloudformation describe-stacks --stack-name batch-genomics-pipeline --query 'Stacks[].Outputs[?OutputKey==`ImageId`].OutputValue' --output text)
+
+# aws cloudformation update-stack --stack-name batch-genomics-pipeline --template-body file://template_cfn.yml --capabilities CAPABILITY_NAMED_IAM --output text --parameters ParameterKey=TemplatesBucket,ParameterValue=${TEMPLATES_BUCKET} ParameterKey=ImageId,ParameterValue=${IMAGE_ID};aws cloudformation wait stack-update-complete --stack-name batch-genomics-pipeline
+
+# aws cloudformation create-stack --stack-name batch-genomics-pipeline --template-body file://template_cfn.yml --enable-termination-protection --output text --parameters ParameterKey=TemplatesBucket,ParameterValue=${TEMPLATES_BUCKET} ParameterKey=ImageId,ParameterValue=${IMAGE_ID}; aws cloudformation wait stack-create-complete --stack-name batch-genomics-pipeline
+
