@@ -26,6 +26,7 @@ COPY busco/src/run_busco.py /
 COPY common_utils /common_utils
 COPY busco/etc/datasets_list.sh /datasets_list.sh
 
+RUN cd /
 RUN bash datasets_list.sh
 
 ENV PATH="/blast/bin:$PATH" \

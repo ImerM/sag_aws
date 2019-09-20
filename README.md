@@ -75,3 +75,7 @@ If a failure occurs make sure you check whether the EC2 instances are still runn
 ### Timeouts
 
 All batch jobs are set to time out after one hour to prevent EC2 instances from staying up if after they get stuck into a loop.
+
+### Funding note
+
+This work has received funding from the European Union’s Horizon 2020 research and innovation programme under the Marie Skłodowska-Curie grant agreement No. H2020-MSCA-ITN-2015-675752.

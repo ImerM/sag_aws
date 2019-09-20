@@ -105,7 +105,7 @@ Outputs:
           "JobName": "Busco1",
           "InputFile": "s3://${JobResultsBucket}/spades/scaffolds.fasta",
           "ResultsPath": "s3://${JobResultsBucket}/busco",
-          "CmdArgs": "-l proteobacteria_odb9 -m genome -c 8 -sp E_coli_K12 -f"
+          "CmdArgs": "-l /proteobacteria_odb9 -m genome -c 8 -sp E_coli_K12 -f"
         }
       }
   # A minimal example workflow input.  All the job definitions have defaults.

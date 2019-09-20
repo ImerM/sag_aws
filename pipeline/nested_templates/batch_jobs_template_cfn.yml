@@ -28,7 +28,7 @@ Resources:
         FastQ2S3Path: "s3://public-bucket-imer/ecoli_mda_lane1_right.fastq.gz"
         WorkingDir: "/scratch"
         PreProcCmdArgs: "--phred64 --pe-mode 1"
-        IndexCmdArgs: "--no-reverse -t 4"
+        IndexCmdArgs: "--no-reverse -t 16"
         PreQCcmdArgs: "-t 16 --force-EM"
         PreQCreportCmdArgs: " --page_per_plot"
       ContainerProperties:
@@ -78,7 +78,7 @@ Resources:
         WorkingDir: "/scratch"
       ContainerProperties:
         Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/trim_galore"
-        Vcpus: 8
+        Vcpus: 4
         Memory: 16000
         JobRoleArn:
           Fn::ImportValue: !Sub "${RoleStackName}:ECSTaskRole"
@@ -118,7 +118,7 @@ Resources:
       ContainerProperties:
         Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/spades"
         Vcpus: 8
-        Memory: 20000
+        Memory: 16000
         JobRoleArn:
           Fn::ImportValue: !Sub "${RoleStackName}:ECSTaskRole"
         Command:
@@ -156,7 +156,7 @@ Resources:
       ContainerProperties:
         Image: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/busco"
         Vcpus: 4
-        Memory: 40000
+        Memory: 16000
         JobRoleArn:
           Fn::ImportValue: !Sub "${RoleStackName}:ECSTaskRole"
         Command:

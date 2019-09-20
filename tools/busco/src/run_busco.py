@@ -69,17 +69,12 @@ def run_busco(cmd_args, input_file, working_dir):
     """
     
     os.chdir(working_dir)
-    busco_folder = os.path.join(working_dir, 'busco')
-
-    try:
-        os.makedirs(busco_folder)
-    except Exception as e:
-        print('couldnt make trimmed folder')
+    busco_folder = os.path.join(working_dir, 'run_busco')
 
     cmd = 'python3 /busco/scripts/run_BUSCO.py -i {0} {1} -o {2}'.format(input_file, cmd_args, 'busco')
     print ("Running: %s" % cmd)
     subprocess.check_call(shlex.split(cmd))
-
+    
     return busco_folder
 
 def main():
@@ -103,11 +98,12 @@ def main():
     print ('Downloading FASTQs')
     
     input_file = download_fastq_file(args.input_file, working_dir)
-    print ('Running trim_galore')
+    print ('Running busco')
     busco_folder = run_busco(args.cmd_args, input_file, working_dir)
     
     print ('Uploading results to %s' % args.results_path)
     upload_results(args.results_path, busco_folder)
+    
     print('Cleaning up working dir')
     delete_working_dir(working_dir)
     print ('Completed')
